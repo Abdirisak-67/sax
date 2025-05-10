@@ -1,0 +1,105 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Attendance from './pages/Attendance';
+import Reports from './pages/Reports';
+import StudentManagement from './pages/StudentManagement';
+import { TeacherManagement, TeacherPage } from './pages/TeacherManagement';
+import StudentReport from './pages/StudentReport';
+import Sidebar from './components/Sidebar';
+ 
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [adminInfo, setAdminInfo] = useState({ exists: false, count: 0, maxReached: false });
+
+  useEffect(() => {
+    const verifyToken = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await fetch('https://sytem-attendance-1.onrender.com/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data);
+          } else {
+            // If token is invalid, clear it
+            localStorage.removeItem('token');
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('Error verifying token:', error);
+          localStorage.removeItem('token');
+          setUser(null);
+        }
+      }
+      setLoading(false);
+    };
+
+    verifyToken();
+  }, []);
+
+  useEffect(() => {
+    // Check admin status
+    fetch('https://sytem-attendance-1.onrender.com/api/auth/check-admin')
+      .then(res => res.json())
+      .then(data => {
+        setAdminInfo(data);
+      })
+      .catch(error => {
+        console.error('Error checking admin status:', error);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        {user && <Sidebar user={user} />}
+        <div className="lg:pl-64">
+          <main className="min-h-screen">
+            <Routes>
+              <Route path="/login" element={!user ? <Login setUser={setUser} /> : <Navigate to="/" />} />
+              <Route 
+                path="/register" 
+                element={
+                  !user && !adminInfo.maxReached ? (
+                    <Register setUser={setUser} adminCount={adminInfo.count} />
+                  ) : (
+                    <Navigate to="/login" />
+                  )
+                } 
+              />
+              <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
+              <Route path="/attendance" element={user?.role === 'teacher' ? <Attendance /> : <Navigate to="/" />} />
+              <Route path="/reports" element={user?.role === 'teacher' ? <Reports /> : <Navigate to="/" />} />
+              <Route path="/students" element={user?.role === 'admin' ? <StudentManagement /> : <Navigate to="/" />} />
+              <Route path="/teachers" element={user?.role === 'admin' ? <TeacherManagement /> : <Navigate to="/" />} />
+              <Route path="/teacher-page" element={user?.role === 'admin' ? <TeacherPage /> : <Navigate to="/" />} />
+              <Route path="/student/:studentId/report" element={user ? <StudentReport /> : <Navigate to="/login" />} />
+            </Routes>
+          </main>
+        </div>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
